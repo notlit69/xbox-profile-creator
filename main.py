@@ -3,7 +3,11 @@ import json
 import threading
 import sys
 import re
+import urllib.parse
+import random
+import string
 import os
+from requests_toolbelt import MultipartEncoder
 
 from colorama import Fore,init
 
@@ -98,7 +102,7 @@ def make(ms_creds : str):
             }  
     while True:
         try:
-            response = s.post(log_url,timeout=20,data=log_data,headers=headers).text
+            response = s.post(log_url,timeout=20,data=log_data,headers=headers)
             break
         except request_exceptions:
             continue
@@ -106,12 +110,103 @@ def make(ms_creds : str):
             sprint(e,"r")
             return
 
+    if 'https://privacynotice.account.microsoft.com/notice' in response.text:
+        privNotifUrl = response.text.split('name="fmHF" id="fmHF" action="')[1].split('"')[0]
+        corelationId = response.text.split('name="correlation_id" id="correlation_id" value="')[1].split('"')[0]
+        mCode = response.text.split('type="hidden" name="code" id="code" value="')[1].split('"')[0]
+        while True:
+             try:
+                  privNotifPage = s.post(privNotifUrl,headers={
+    'authority': 'privacynotice.account.microsoft.com',
+    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'path' : privNotifUrl.replace('https://privacynotice.account.microsoft.com',''),
+    'accept-language': 'en-US,en;q=0.7',
+    'cache-control': 'max-age=0',
+    'content-type': 'application/x-www-form-urlencoded',
+    'origin': 'https://login.live.com',
+    'referer': 'https://login.live.com/',
+    'sec-ch-ua': '"Not.A/Brand";v="8", "Chromium";v="114", "Brave";v="114"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"',
+    'sec-fetch-dest': 'document',
+    'sec-fetch-mode': 'navigate',
+    'sec-fetch-site': 'cross-site',
+    'sec-gpc': '1',
+    'upgrade-insecure-requests': '1',
+    'user-agent':ua,
+},data={'correlation_id':corelationId,
+        'code':mCode}).text
+                  break
+             except:
+                  continue
+        m = MultipartEncoder(fields={'AppName': 'ALC',
+'ClientId': privNotifPage.split("ucis.ClientId = '")[1].split("'")[0],
+'ConsentSurface': 'SISU',
+'ConsentType': 'ucsisunotice',
+'correlation_id': corelationId,
+'CountryRegion': privNotifPage.split("ucis.CountryRegion = '")[1].split("'")[0],
+'DeviceId':'' ,
+'EncryptedRequestPayload': privNotifPage.split("ucis.EncryptedRequestPayload = '")[1].split("'")[0]
+,'FormFactor': 'Desktop',
+'InitVector':privNotifPage.split("ucis.InitVector = '")[1].split("'")[0],
+'Market': privNotifPage.split("ucis.Market = '")[1].split("'")[0],
+'ModelType': 'ucsisunotice',
+'ModelVersion': '1.11',
+'NoticeId': privNotifPage.split("ucis.NoticeId = '")[1].split("'")[0],
+'Platform': 'Web',
+'UserId': privNotifPage.split("ucis.UserId = '")[1].split("'")[0],
+'UserVersion': '1'},boundary='----WebKitFormBoundary' \
+           + ''.join(random.sample(string.ascii_letters + string.digits, 16)))
+        headers = {
+    'authority': 'privacynotice.account.microsoft.com',
+    'accept': 'application/json, text/plain, */*',
+    'accept-language': 'en-US,en;q=0.7',
+    'content-type': m.content_type,
+    'origin': 'https://privacynotice.account.microsoft.com',
+    'referer': privNotifUrl,
+    'sec-ch-ua': '"Not.A/Brand";v="8", "Chromium";v="114", "Brave";v="114"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"',
+    'sec-fetch-dest': 'empty',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-site': 'same-origin',
+    'sec-gpc': '1',
+    'user-agent': ua,
+}
 
+        while True:
+             try:
+                  response = s.post('https://privacynotice.account.microsoft.com/recordnotice', headers=headers, data=m)
+                  break
+             except:
+                  continue
+        while True:
+             try:
+                  response = s.get(urllib.parse.unquote(privNotifUrl.split('notice?ru=')[1]),headers={
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.6',
+    'Connection': 'keep-alive',
+    'Referer': 'https://privacynotice.account.microsoft.com/',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'cross-site',
+    'Sec-Fetch-User': '?1',
+    'Sec-GPC': '1',
+    'Upgrade-Insecure-Requests': '1',
+    'User-Agent': ua,
+    'sec-ch-ua': '"Not.A/Brand";v="8", "Chromium";v="114", "Brave";v="114"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"',
+})
+                  break
+             except:
+                  continue
     try:
-        ppft2 = re.findall("sFT:'(.+?(?=\'))", response)[0],
-        url_log2 = re.findall("urlPost:'(.+?(?=\'))", response)[0]
+        ppft2 = re.findall("sFT:'(.+?(?=\'))", response.text)[0],
+        url_log2 = re.findall("urlPost:'(.+?(?=\'))", response.text)[0]
     except:
-        sprint("[-] Invalid microsoft acc!","y")
+        sprint(f"[-] Invalid microsoft acc -> {ms_creds}","y")
+        open('sus.html','w',encoding='utf-8').write(response.text)
         remove_content("accs.txt",ms_creds)
         fail += 1
         return
